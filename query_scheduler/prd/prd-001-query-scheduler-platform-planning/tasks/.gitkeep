@@ -1,0 +1,2 @@
+# Tasks for this PRD go here
+# Use: PROJECT_ROOT=. uv run python <skill-scripts>/prd.py new-task --prd prd-001-query-scheduler-platform-planning --name 'Task Name'

@@ -1,0 +1,72 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: query_scheduler
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Observability (optional, enable with: docker compose --profile otel up -d) ---
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    profiles: [otel]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus metrics
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:latest
+    profiles: [otel]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo/config.yaml
+    command: ["-config.file=/etc/tempo/config.yaml"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: [otel]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: [otel]
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  postgres_data:

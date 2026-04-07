@@ -1,4 +1,18 @@
-.PHONY: run test lint format check sync migrate migrate-create seed docker-build docker-run compose-up compose-down compose-logs smoke-test snowflake-test
+.PHONY: dev db db-kill run test lint format check sync migrate migrate-create seed docker-build docker-run compose-up compose-down compose-logs smoke-test snowflake-test
+
+db:
+	@docker compose up -d postgres
+	@echo "Waiting for Postgres..."
+	@until docker compose exec postgres pg_isready -U postgres > /dev/null 2>&1; do sleep 1; done
+	@echo "Postgres ready."
+
+db-kill:
+	@docker ps -q --filter "publish=5432" | xargs -r docker stop | xargs -r docker rm
+	@echo "Killed containers on port 5432."
+
+dev: db
+	uv sync
+	uv run uvicorn query_scheduler.app:app --reload --host 0.0.0.0 --port 8000
 
 run:
 	uv run uvicorn query_scheduler.app:app --reload --host 0.0.0.0 --port 8000
@@ -42,7 +56,7 @@ compose-down:
 compose-logs:
 	docker compose logs -f
 
-smoke-test:
+smoke-test: db
 	uv run python scripts/smoke_test.py run
 
 snowflake-test:
